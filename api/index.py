@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import os
@@ -7,7 +7,9 @@ import joblib
 app = FastAPI(
     title="PowerEstimate ML API",
     description="Electricity Bill Prediction using Random Forest on Vercel",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json"
 )
 
 app.add_middleware(
@@ -17,6 +19,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def normalize_vercel_path(request: Request, call_next):
+    # Normalize internal Vercel rewrites like /api/index.py/predict or /api/index.py
+    path = request.scope.get("path", "")
+    if path.startswith("/api/index.py"):
+        request.scope["path"] = path.replace("/api/index.py", "", 1) or "/"
+    elif path.startswith("/index.py"):
+        request.scope["path"] = path.replace("/index.py", "", 1) or "/"
+    return await call_next(request)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
