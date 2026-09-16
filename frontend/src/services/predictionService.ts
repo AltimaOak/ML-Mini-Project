@@ -2,8 +2,10 @@ import type { PredictionInput, PredictionResult, BillBreakdown, UsageComparison 
 import { generateBillNumber, generateMeterNumber } from '../utils/billNumber';
 import { formatLongDate } from '../utils/formatters';
 
-// Runtime configuration for API URL (defaults to env or empty string for mock mode)
-export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+// Runtime configuration for API URL (defaults to '/api' for unified Vercel full-stack deployment)
+export const API_BASE_URL = import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '' 
+  ? import.meta.env.VITE_API_URL 
+  : '/api';
 
 export interface PredictionOptions {
   forceMock?: boolean;
@@ -140,7 +142,8 @@ export async function predictBill(
 
   if (shouldCallApi) {
     try {
-      const response = await fetch(`${API_BASE_URL}/predict`, {
+      const baseUrl = API_BASE_URL.replace(/\/+$/, '');
+      const response = await fetch(`${baseUrl}/predict`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -166,8 +169,9 @@ export async function predictBill(
       predictedAmount = Math.round(data.predicted_bill);
       source = 'api';
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Network failure while connecting to prediction server';
-      throw new Error(`Could not connect to ML backend: ${message}. Check your API connection or switch to Demo Mode.`);
+      console.warn('API call unsuccessful, falling back to domestic tariff model:', err);
+      predictedAmount = await mockPredict(input);
+      source = 'mock';
     }
   } else {
     // Development/demo mode
